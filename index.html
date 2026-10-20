@@ -44,7 +44,7 @@
 <div class="stat"><label>每个光脉冲的能量</label><div class="value" id="outEnergy">—</div></div><div class="stat"><label>激光电流峰值 · 粗估／实测</label><div class="value" id="outCurrent">—</div></div></div>
 <p id="basis" class="notice"></p><div class="buttons" aria-label="图表缩放"><button id="zoomXIn">时间轴放大</button><button id="zoomXOut">时间轴缩小</button><button id="zoomYIn">功率轴放大</button><button id="zoomYOut">功率轴缩小</button><button id="fitChart">适配当前波形</button><button id="resetChart">恢复坐标</button></div><p id="chartRange" class="caption" aria-live="polite"></p><svg id="chart" viewBox="0 0 500 250" role="img" aria-label="按所选形状绘制的示意光脉冲，非实测波形"></svg><p class="caption">坐标范围保持固定，修改光脉宽可直接比较曲线宽窄。缩放按钮只调整视图，不改变计算结果；超出范围的波形会被裁切，可点“适配当前波形”。实线为当前条件，虚线为校准基准。</p>
 <table><tbody id="numbers"></tbody></table></div>
-<div id="chargePanel" class="panel" hidden><h2>电容充电恢复 · RC 参考曲线</h2><p class="caption">从0 V经电阻向恒压源充电的理想模型；以输入的电容电压作为恢复目标参考。耦合电路实际初值、钳位和供电可能不同，不自动修正已输入的实测电压。</p><svg id="chargeChart" viewBox="0 0 500 250" role="img" aria-label="电容电压随充电时间变化的RC参考曲线"></svg><table><tbody id="chargeNumbers"></tbody></table><p id="chargeHint" class="notice"></p></div><div class="panel"><h2>状态检查 · 与手册上限对比</h2><p class="caption">每条满格代表对应手册上限；差值仅为数值比较，不代表可安全增加的幅度。</p><div id="states"></div><div class="notice">低于某一项极限不代表器件整体安全；本工具不能捕获隐藏尖峰、反向电流、局部热效应或已发生的器件损伤。</div></div>
+<div id="chargePanel" class="panel" hidden><h2>电容充电恢复 · RC 参考曲线</h2><p class="caption">从0 V经电阻向恒压源充电的理想模型；以输入的电容电压作为恢复目标参考。耦合电路实际初值、钳位和供电可能不同，不自动修正已输入的实测电压。</p><div id="chargeBudget" aria-live="polite"></div><svg id="chargeChart" viewBox="0 0 500 250" role="img" aria-label="电容电压随充电时间变化的RC参考曲线"></svg><table><tbody id="chargeNumbers"></tbody></table><p id="chargeHint" class="notice"></p></div><div class="panel"><h2>状态检查 · 与手册上限对比</h2><p class="caption">每条满格代表对应手册上限；差值仅为数值比较，不代表可安全增加的幅度。</p><div id="states"></div><div class="notice">低于某一项极限不代表器件整体安全；本工具不能捕获隐藏尖峰、反向电流、局部热效应或已发生的器件损伤。</div></div>
 <div class="panel"><h2>怎样让结果更准确</h2><table><thead><tr><th>补充数据</th><th>用途</th></tr></thead><tbody>
 <tr><td>光波形原始数据、带宽和线性验证</td><td>用波形积分 / 峰值得到等效宽度，识别次峰、探测器饱和和带宽展宽。</td></tr>
 <tr><td>电流波形或完整周期 RMS</td><td>直接核算电阻平均耗散；光功率无法揭示所有电流。</td></tr>
@@ -63,7 +63,7 @@
 <label>电流脉冲形状<select id="ishape"><option value="gaussian">高斯形（假设）</option><option value="rectangle">矩形（假设）</option></select></label>
 <label>激光器实际最大反向电压（V，选填）<input id="reverse" type="number" min="0" step="0.1" placeholder="器件两端，非阴极单端尖峰"></label>
 <label>壳温（℃，选填）<input id="temp" type="number" step="1" placeholder="典型光电模型参考25℃"></label>
-</div></details></div><footer>默认值用于复现 0.4 mW、200 kHz、6.5 ns 的讨论案例；40 V 等未在本次确认的电容电压条件只是可编辑示例。参数仅保存在当前浏览器本地，预测不会自动改写校准。版本 v1.1.0 · 2026-10-20</footer>
+</div></details></div><footer>默认值用于复现 0.4 mW、200 kHz、6.5 ns 的讨论案例；40 V 等未在本次确认的电容电压条件只是可编辑示例。参数仅保存在当前浏览器本地，预测不会自动改写校准。版本 v1.2.0 · 2026-10-20</footer>
 </main><script>
 'use strict';
 const $=id=>document.getElementById(id), GAUSS=Math.sqrt(Math.PI)/(2*Math.sqrt(Math.log(2))), ISQ=GAUSS/Math.sqrt(2);
@@ -140,22 +140,33 @@ function draw(s,r){
  html+='<text x="420" y="231" font-size="12" fill="#5c6f7d">时间（ns）</text><text x="65" y="231" font-size="12" fill="#5c6f7d">'+(validBase?'虚线：校准峰值 '+fmt(base.peak)+' W':'固定坐标 · 缩放仅改变视图')+'</text>';
  svg.innerHTML=html;
 }
+function chargingBudget(s,r){
+ if(r.errors.length||!(r.rc>0))return null;
+ const required=Math.log(100)*r.rc,minimumPeriod=required+s.trig*1e-9,maxFrequency=1/minimumPeriod;
+ return {target:99,required,available:r.off,timeMargin:r.off-required,maxFrequency,frequencyMargin:maxFrequency-r.f,utilization:r.f/maxFrequency,meets:r.off>=required};
+}
 function drawCharge(s,r){
  $('chargePanel').hidden=s.mode!=='model';if(s.mode!=='model')return;
- if(r.errors.length||!(r.rc>0)){$('chargeChart').innerHTML='';$('chargeNumbers').innerHTML='';$('chargeHint').textContent=r.errors.length?'请修正参数后查看充电曲线。':'RC为0，本理想充电曲线不适用。';return;}
+ if(r.errors.length||!(r.rc>0)){$('chargeBudget').innerHTML='';$('chargeChart').innerHTML='';$('chargeNumbers').innerHTML='';$('chargeHint').textContent=r.errors.length?'请修正参数后查看充电曲线。':'RC为0，本理想充电曲线不适用。';return;}
+ const budget=chargingBudget(s,r);const fraction=-Math.expm1(-r.off/r.rc);
+ const timeText=budget.meets?'每周期剩余充电时间':'每周期缺少充电时间';
+ const freqText=budget.meets?'距99%充电频率上限还可增加':'当前频率超过99%充电上限';
+ $('chargeBudget').innerHTML='<div class="notice'+(budget.meets?'':' warn')+'"><strong>'+(budget.meets?'当前频率满足99%充电条件（理想模型）':'当前频率不能满足99%充电条件（理想模型）')+'</strong><div>'+timeText+'：'+fmt(Math.abs(budget.timeMargin)*1e9)+' ns</div><div>'+freqText+'：'+fmt(Math.abs(budget.frequencyMargin)/1e3)+' kHz</div></div><div class="limit-item'+(budget.meets?'':' limit-over')+'"><div class="limit-head"><strong>触发频率与99%充电上限</strong><span class="limit-badge">仅RC恢复约束</span></div><div class="limit-value">'+fmt(s.freq)+' kHz <span class="unit">/ '+fmt(budget.maxFrequency/1e3)+' kHz</span></div><div class="limit-track" role="meter" aria-label="当前频率占99%充电上限" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.min(100,budget.utilization*100)+'" aria-valuetext="'+fmt(budget.utilization*100)+'%"><div class="limit-fill" style="width:'+Math.min(100,budget.utilization*100)+'%"></div></div><div class="limit-ends"><span>0 kHz</span><span>理论上限 '+fmt(budget.maxFrequency/1e3)+' kHz</span></div><div class="limit-gap">占上限 '+fmt(budget.utilization*100)+'%'+(budget.meets?'；剩余频率裕度 '+fmt((1-budget.utilization)*100)+'%（以上限为基准）':'；已超出 '+fmt((budget.utilization-1)*100)+'%')+'</div></div>';
  const tau=r.rc*1e9,V=r.v,maxT=tau*6;const pts=[];
  for(let i=0;i<=300;i++){const t=maxT*i/300;pts.push((65+405*i/300).toFixed(2)+','+(190-148*(1-Math.exp(-t/tau))).toFixed(2));}
  let h='<text x="15" y="20" font-size="12" fill="#5c6f7d">电容电压（V）</text><path d="M65 42V190H470" fill="none" stroke="#b9c9d1"/>';
  for(let i=0;i<=4;i++){const y=190-i/4*148;h+='<path d="M65 '+y+'H470" stroke="#dce4e9" stroke-dasharray="3 4"/><text x="57" y="'+(y+4)+'" text-anchor="end" fill="#5c6f7d" font-size="11">'+fmt(V*i/4)+'</text>';}
  for(let i=0;i<=3;i++)h+='<text x="'+(65+i/3*405)+'" y="211" text-anchor="middle" fill="#5c6f7d" font-size="11">'+fmt(maxT*i/3)+'</text>';
+ const x99=65+405*budget.required*1e9/maxT;h+='<path d="M'+x99+' 42V190" stroke="#8b96a0" stroke-dasharray="3 4"/><text x="'+(x99-5)+'" y="58" text-anchor="end" fill="#5c6f7d" font-size="12">99%充电时间</text>';
  h+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#006d77" stroke-width="3"/>';
  const offNs=r.off*1e9;if(offNs>=0&&offNs<=maxT){const x=65+405*offNs/maxT;h+='<path d="M'+x+' 42V190" stroke="#b66b19" stroke-dasharray="5 3"/><text x="80" y="32" font-size="12" fill="#805006">虚线：可用关断间隔 '+fmt(offNs)+' ns</text>';}
  h+='<text x="410" y="235" font-size="12" fill="#5c6f7d">时间（ns）</text>';$('chargeChart').innerHTML=h;
  const rows=[['RC 时间常数',fmt(tau)+' ns'],['充到95%',fmt(-Math.log(.05)*tau)+' ns'],['充到99%',fmt(-Math.log(.01)*tau)+' ns'],['充到99.3%（约5RC）',fmt(5*tau)+' ns'],['可用关断间隔（周期−TRIG）',fmt(offNs)+' ns']];
  $('chargeNumbers').innerHTML=rows.map(x=>'<tr><th>'+x[0]+'</th><td>'+x[1]+'</td></tr>').join('');
- const fraction=1-Math.exp(-r.off/r.rc);$('chargeHint').textContent='数学上100%需要无限时间，工程上常用99%或约5RC。当前关断间隔下，理想模型恢复至目标的 '+fmt(fraction*100)+'%。'+(r.off<5*r.rc?'不足5RC，需检查实际欠充电。':'大于5RC，仍需用实测波形核对。');$('chargeHint').className='notice'+(r.off<5*r.rc?' warn':'');
+ $('chargeHint').textContent='数学上100%需无限时间；这里把达到99%作为恢复判据。当前理想恢复比例约 '+fmt(fraction*100)+'%。频率上限 = 1 /（TRIG脉宽 + 99%充电时间）。这是仅由RC决定的上限，不是激光器允许的最高频率，还要满足占空比、温度及驱动能力等约束；实际充电窗口须按开关时序核实。';$('chargeHint').className='notice'+(budget.meets?'':' warn');
+
 }
-function update(){const s=read(),r=calculate(s);lastResult={inputs:s,results:r,reference};$('measuredInputs').hidden=s.mode!=='measured';$('modelInputs').hidden=s.mode!=='model';$('tabMeasured').setAttribute('aria-pressed',s.mode==='measured');$('tabModel').setAttribute('aria-pressed',s.mode==='model');$('multiPanel').hidden=!($('mode').value==='measured'&&$('shape').value==='multi');$('modelMultiPanel').hidden=!(s.mode==='model'&&s.shape==='multi');$('thirdPanel').hidden=Number($('peakCount').value)!==3;$('modelThirdPanel').hidden=Number($('modelPeakCount').value)!==3; $('modelEqWrap').hidden=s.shape!=='custom';$('avgResultLabel').textContent=s.mode==='model'?'平均光功率 · 预测':'平均光功率 · 实测换算';$('eqWrap').hidden=s.shape!=='custom';$('avg').disabled=s.mode==='model';$('resultTitle').textContent=s.mode==='model'?'驱动预测结果 · 经验模型':'实测换算结果';$('errors').hidden=!r.errors.length;$('errors').textContent=r.errors.join('；');
+function update(){const s=read(),r=calculate(s);lastResult={inputs:s,results:r,chargingBudget:s.mode==='model'?chargingBudget(s,r):null,reference};$('measuredInputs').hidden=s.mode!=='measured';$('modelInputs').hidden=s.mode!=='model';$('tabMeasured').setAttribute('aria-pressed',s.mode==='measured');$('tabModel').setAttribute('aria-pressed',s.mode==='model');$('multiPanel').hidden=!($('mode').value==='measured'&&$('shape').value==='multi');$('modelMultiPanel').hidden=!(s.mode==='model'&&s.shape==='multi');$('thirdPanel').hidden=Number($('peakCount').value)!==3;$('modelThirdPanel').hidden=Number($('modelPeakCount').value)!==3; $('modelEqWrap').hidden=s.shape!=='custom';$('avgResultLabel').textContent=s.mode==='model'?'平均光功率 · 预测':'平均光功率 · 实测换算';$('eqWrap').hidden=s.shape!=='custom';$('avg').disabled=s.mode==='model';$('resultTitle').textContent=s.mode==='model'?'驱动预测结果 · 经验模型':'实测换算结果';$('errors').hidden=!r.errors.length;$('errors').textContent=r.errors.join('；');
  $('modeHint').hidden=s.mode==='measured';$('modeHint').textContent='储能由电容实测电压和电容值计算；光功率按实测校准比预测。TRIG和充电电阻用于时序与恢复检查，阴极负峰用于瞬态工况对比。';
  $('voltageNote').textContent='储能统一使用触发前电容两端实测电压。没有额外的设定高压覆盖关系。';
  $('cathodeNote').textContent=s.cathode===null?'阴极负峰未知。它是发射瞬态的测量结果，不能代替电容初始电压，也不能单独反推光功率。':'阴极最低电压：'+fmt(s.cathode)+' V；'+(reference&&reference.cathode!==null&&reference.cathode!==undefined?'校准值 '+fmt(reference.cathode)+' V，变化 '+fmt(s.cathode-reference.cathode)+' V。':'校准点未记录阴极负峰。')+' 包含寄生电感与探测影响，仅用于工况对比，不直接缩放光功率。';
@@ -179,7 +190,7 @@ function update(){const s=read(),r=calculate(s);lastResult={inputs:s,results:r,r
  const iduty=s.iwidth===null?null:s.iwidth*1e-9*r.f*s.count;
  limitBar('duty',iduty===null?'光 FWHM 占空比（参考）':'电流 FWHM 占空比',(iduty??r.duty)*100,s.maxDuty,'%',iduty===null?'参考值，待测电流脉宽':'由输入电流脉宽换算',iduty===null?'以光脉宽作参考比较；实际电流占空比仍未知，不代表已完成规格核验。':'');
  if(s.iwidth!==null)limitBar('width','电流脉宽',s.iwidth,s.maxWidth,'ns','用户输入');
- if(s.mode==='model'){if(r.rc>0)state('充电恢复',r.off<5*r.rc?'关断间隔不足 5RC，可能欠充电。':'关断间隔大于 5RC；简化模型，仍需检查实际电容电压和供电下陷。',r.off<5*r.rc);else state('充电恢复','RC 为零，无法用本简化模型评估充电。');}
+ if(s.mode==='model'){if(r.rc>0)state('充电恢复',r.off<Math.log(100)*r.rc?'关断间隔不足99%充电时间，可能欠充电。':'关断间隔满足99%理想充电时间；仍需检查实际电容电压和供电下陷。',r.off<Math.log(100)*r.rc);else state('充电恢复','RC 为零，无法用本简化模型评估充电。');}
  limitBar('reverse','器件两端反向电压',s.reverse,s.maxReverse,'V',s.reverse===null?'待补测':'用户实测','阴极对地的负尖峰不能直接代替器件两端反向电压。');
  state('温度',s.temp===null?'壳温未知；光电粗估参考25℃，未自动温补。':fmt(s.temp)+' ℃ / 手册工作温度 '+s.minTemp+'～'+s.maxTemp+' ℃；光电粗估未温补。',s.temp!==null&&(s.temp<s.minTemp||s.temp>s.maxTemp));
  if(s.mode==='model')state('预测边界','只按校准比缩放，不自动预测脉宽、阻尼、温升或损坏；变更激光器、串联阻值或布局需重新校准。',true);

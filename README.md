@@ -1,6 +1,6 @@
 # 激光脉冲工作台 · Laser Pulse Workbench
 
-**当前版本：v1.1.0**
+**当前版本：v1.2.0**
 
 一个可直接在浏览器中运行的离线激光脉冲计算工具。面向脉冲激光器调试，通过平均光功率与光波形估算峰值、单脉冲光能，并提供基于实测校准的驱动条件预测。
 
@@ -8,7 +8,7 @@
 
 ## 下载与启动
 
-1. 从 [Releases](https://github.com/fengbihe/laser-pulse-workbench/releases) 下载 `laser-pulse-workbench-v1.1.0.zip`，或使用 GitHub 的 **Code → Download ZIP**。
+1. 从 [Releases](https://github.com/fengbihe/laser-pulse-workbench/releases) 下载 `laser-pulse-workbench-v1.2.0.zip`，或使用 GitHub 的 **Code → Download ZIP**。
 2. 解压后双击 `index.html`，用 Chrome、Edge、Safari 等现代浏览器打开。
 3. 选择“① 实测换算”或“② 驱动预测”。
 
@@ -129,7 +129,7 @@ g(t) = Σ aᵢ × exp[−4 ln(2) × ((t − dᵢ) / wᵢ)²]
 ## 保存、导出与隐私
 
 - “保存参数”使用当前浏览器的本地存储；更换浏览器、电脑、路径或清理数据后，不保证保留。
-- “导出结果”生成 JSON，包含输入、校准点及计算结果，用于记录；v1.1.0 尚不支持导入恢复。
+- “导出结果”生成 JSON，包含输入、校准点及计算结果，用于记录；v1.2.0 尚不支持导入恢复。
 - “恢复示例”会清除本地保存并恢复示例参数与坐标。
 - 页面无需联网，不发送实验参数到服务器。分享项目不包含原使用者浏览器中的参数。
 - 仓库包含软件与示例，不包含硬件设计文件、原始照片或原厂 PDF。
@@ -162,9 +162,27 @@ npm test
 
 ## 版本
 
-[v1.1.0 发布页](https://github.com/fengbihe/laser-pulse-workbench/releases/tag/v1.1.0) · [更新记录](CHANGELOG.md) · [详细使用说明](使用说明.md)
+[v1.2.0 发布页](https://github.com/fengbihe/laser-pulse-workbench/releases/tag/v1.2.0) · [更新记录](CHANGELOG.md) · [详细使用说明](使用说明.md)
 
 
 ## v1.1.0 改进
 
 状态检查增加当前值与手册上限的比例条、差值及超限提示。驱动输入统一为触发前电容两端实测电压；右侧新增理想RC恢复曲线，显示95%、99%、约5RC及可用关断间隔。阴极最低负压用于校准工况对比，不直接反推光功率。RC曲线从0V起充，以输入电压作为目标参考，不自动修正已经测得的电容初始电压。
+
+
+## v1.2.0：99%充电与频率裕度
+
+驱动预测中的RC面板按99%恢复判据比较当前有效触发频率：
+
+```text
+t99 = ln(100) × RC
+可用恢复时间 = 1/f − TRIG脉宽
+时间裕度 = 可用恢复时间 − t99
+fmax = 1 / (t99 + TRIG脉宽)
+频率裕度 = fmax − f
+剩余裕度百分比 = (fmax − f) / fmax × 100%
+```
+
+新增频率对比条、充电是否满足判据的明确提示、剩余或缺少时间、99%曲线标记，并在JSON中导出充电预算。负裕度代表该理想模型下不能在下一次触发前恢复至99%。
+
+fmax仅表示RC恢复约束，不能代替激光器占空比、温度和驱动能力限制；实际恢复窗口需按开关时序验证。
