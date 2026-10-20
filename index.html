@@ -62,7 +62,7 @@
 <label>电流脉冲形状<select id="ishape"><option value="gaussian">高斯形（假设）</option><option value="rectangle">矩形（假设）</option></select></label>
 <label>激光器实际最大反向电压（V，选填）<input id="reverse" type="number" min="0" step="0.1" placeholder="器件两端，非阴极单端尖峰"></label>
 <label>壳温（℃，选填）<input id="temp" type="number" step="1" placeholder="典型光电模型参考25℃"></label>
-</div></details></div><footer>默认值用于复现 0.4 mW、200 kHz、6.5 ns 的讨论案例；40 V 等未在本次确认的条件只是可编辑示例。参数仅保存在当前浏览器本地，预测不会自动改写校准。版本 1.2 · 2026-10-19</footer>
+</div></details></div><footer>默认值用于复现 0.4 mW、200 kHz、6.5 ns 的讨论案例；40 V 等未在本次确认的条件只是可编辑示例。参数仅保存在当前浏览器本地，预测不会自动改写校准。版本 v1.0.0 · 2026-10-20</footer>
 </main><script>
 'use strict';
 const $=id=>document.getElementById(id), GAUSS=Math.sqrt(Math.PI)/(2*Math.sqrt(Math.log(2))), ISQ=GAUSS/Math.sqrt(2);
